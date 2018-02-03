@@ -6,13 +6,13 @@ type RangeSearchSimple struct {
 
 func (self *RangeSearchSimple) Query(bottomLeft, topRight Point) []int {
 	var result = []int{}
-	isContained := func(p Point) {
+	isContained := func(point Point) bool {
 		return point.x >= bottomLeft.x && point.x <= topRight.x &&
 			point.y >= bottomLeft.y && point.y <= topRight.y
 	}
 	for index, point := range self.points {
 		if isContained(point) {
-			append(result, index)
+			result = append(result, index)
 		}
 	}
 	return result

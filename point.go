@@ -1,5 +1,5 @@
 package goors
 
 type Point struct {
-	x, y double
+	x, y float64
 }
