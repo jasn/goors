@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestmakeTreeOnXAxis(t *testing.T) {
+func TestMakeTreeOnXAxis(t *testing.T) {
 	n := 6
 	points := make([]pointRankPerm, n)
 	for i := 0; i < n; i++ {

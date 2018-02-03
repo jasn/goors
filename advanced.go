@@ -10,7 +10,9 @@ type RangeSearchAdvanced struct {
 	pointsRankSpace      []pointRankPerm
 	xTree                []int
 	xTreeHeight          int // number of nodes on root to leaf path including root and leaf.
+	bitArrays            [][]int
 	rankSelectStructures []gorasp.RankSelect
+	ballInheritance      [][]int
 }
 
 func getNextPowerOfTwo(n int) int {
@@ -30,6 +32,49 @@ func getNextPowerOfTwo(n int) int {
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	var result = []int{}
 	return result
+}
+
+func (self *RangeSearchAdvanced) searchAndAppend(point pointRankPerm) {
+	var recursivelySearchAndAppend func(node, height int)
+	recursivelySearchAndAppend = func(node, height int) {
+		firstLeafIndex := len(self.xTree) / 2
+		if node >= firstLeafIndex {
+			return
+		}
+		key := self.xTree[node]
+		if point.x <= key {
+			self.bitArrays[height] = append(self.bitArrays[height], 0)
+			self.ballInheritance[height] = append(self.ballInheritance[height], point.i)
+			recursivelySearchAndAppend(2*node+1, height+1)
+		} else {
+			self.bitArrays[height] = append(self.bitArrays[height], 1)
+			self.ballInheritance[height] = append(self.ballInheritance[height], point.i)
+			recursivelySearchAndAppend(2*node+2, height+1)
+		}
+	}
+	root := 0
+	rootHeight := 0
+	recursivelySearchAndAppend(root, rootHeight)
+}
+
+func (self *RangeSearchAdvanced) buildRankSelectAndBallInheritance() {
+	self.initializeRankSelectBallInheritance()
+
+	sort.Sort(byYRank(self.pointsRankSpace))
+	for _, p := range self.pointsRankSpace {
+		self.searchAndAppend(p)
+	}
+	for i := 0; i < self.xTreeHeight; i++ {
+		self.rankSelectStructures[i] = gorasp.NewRankSelectFast(self.bitArrays[i])
+	}
+	sort.Sort(byXRank(self.pointsRankSpace))
+}
+
+func (self *RangeSearchAdvanced) initializeRankSelectBallInheritance() {
+	heightWithoutLeaves := self.xTreeHeight - 1
+	self.bitArrays = make([][]int, heightWithoutLeaves)
+	self.rankSelectStructures = make([]gorasp.RankSelect, heightWithoutLeaves)
+	self.ballInheritance = make([][]int, heightWithoutLeaves)
 }
 
 func setLeavesOfXTree(xTree []int, pointsRankSpace []pointRankPerm) []int {
@@ -84,10 +129,11 @@ func (self *RangeSearchAdvanced) makeTreeOnXAxis() {
 
 	self.xTree = setInternalNodesOfXTree(self.xTree)
 
-	self.setXTreeHeight(arrayLength)
+	self.setXTreeHeight()
 }
 
-func (self *RangeSearchAdvanced) setXTreeHeight(arrayLength int) {
+func (self *RangeSearchAdvanced) setXTreeHeight() {
+	arrayLength := len(self.xTree)
 	height := uint(1)
 	for 1<<height < arrayLength {
 		height++
