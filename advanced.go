@@ -1,14 +1,16 @@
 package goors
 
 import (
+	"github.com/jasn/gorasp"
 	"sort"
 )
 
 type RangeSearchAdvanced struct {
-	points          []Point
-	pointsRankSpace []pointRankPerm
-	xTree           []int
-	xTreeHeight     int // number of nodes on root to leaf path including root and leaf.
+	points               []Point
+	pointsRankSpace      []pointRankPerm
+	xTree                []int
+	xTreeHeight          int // number of nodes on root to leaf path including root and leaf.
+	rankSelectStructures []gorasp.RankSelect
 }
 
 func getNextPowerOfTwo(n int) int {
@@ -30,44 +32,57 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	return result
 }
 
-func (self *RangeSearchAdvanced) makeTreeOnXAxis() {
-	arrayLength := 2*getNextPowerOfTwo(len(self.pointsRankSpace)) - 1
-	self.xTree = make([]int, arrayLength)
-	sort.Sort(byXRank(self.pointsRankSpace))
-
+func setLeavesOfXTree(xTree []int, pointsRankSpace []pointRankPerm) []int {
+	arrayLength := len(xTree)
 	leafsStartAt := arrayLength / 2
-	for i, p := range self.pointsRankSpace {
+	for i, p := range pointsRankSpace {
 		index := i + leafsStartAt
-		self.xTree[index] = p.x
+		xTree[index] = p.x
 	}
 
-	leafsEndAt := leafsStartAt + len(self.pointsRankSpace)
+	leafsEndAt := leafsStartAt + len(pointsRankSpace)
 	maxInt := 1<<31 - 1
-	for i := leafsEndAt; i < len(self.xTree); i++ {
-		self.xTree[i] = maxInt
+	for i := leafsEndAt; i < len(xTree); i++ {
+		xTree[i] = maxInt
 	}
+	return xTree
+}
 
-	var maxSubTree func(int) int
+func setInternalNodesOfXTree(xTree []int) []int {
+	var maxSubTree func(n int) int
 	maxSubTree = func(n int) int {
 		rightChild := 2*n + 2
-		if rightChild > len(self.xTree) {
-			return self.xTree[n]
+		if rightChild > len(xTree) {
+			return xTree[n]
 		}
 		return maxSubTree(rightChild)
 	}
 
 	maxLeftSubTree := func(n int) int {
 		leftChild := 2*n + 1
-		if leftChild > len(self.xTree) {
+		if leftChild > len(xTree) {
 			return maxSubTree(n)
 		}
 		return maxSubTree(leftChild)
 	}
 
+	arrayLength := len(xTree)
 	for i := arrayLength/2 - 1; i >= 0; i-- {
 		key := maxLeftSubTree(i)
-		self.xTree[i] = key
+		xTree[i] = key
 	}
+
+	return xTree
+}
+
+func (self *RangeSearchAdvanced) makeTreeOnXAxis() {
+	arrayLength := 2*getNextPowerOfTwo(len(self.pointsRankSpace)) - 1
+	self.xTree = make([]int, arrayLength)
+	sort.Sort(byXRank(self.pointsRankSpace))
+
+	self.xTree = setLeavesOfXTree(self.xTree, self.pointsRankSpace)
+
+	self.xTree = setInternalNodesOfXTree(self.xTree)
 
 	self.setXTreeHeight(arrayLength)
 }
