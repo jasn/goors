@@ -52,6 +52,13 @@ func TestSomething(t *testing.T) {
 			t.Fail()
 		}
 	}
+
+	a := Point{1.9, 3.9}
+	b := Point{6.5, 9.2}
+	result := structure.Query(a, b)
+	for _, v := range result {
+		fmt.Println(v, "->", points[v])
+	}
 }
 
 func TestLowestCommonAncestor(t *testing.T) {

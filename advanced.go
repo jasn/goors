@@ -16,6 +16,9 @@ type RangeSearchAdvanced struct {
 	ballInheritance      [][]int
 	xCoords              []float64
 	yCoords              []float64
+	queryResult          []int
+	queryTopRight        Point
+	queryBottomLeft      Point
 }
 
 func getNextPowerOfTwo(n int) int {
@@ -66,12 +69,86 @@ func descendRight(currentIndex int, rankSelectStruct gorasp.RankSelect) int {
 	return int(onesLeft)
 }
 
-func (self *RangeSearchAdvanced) reportLeftHanging(lca, yLeft, yRight int) {
-
+func isLeaf(n int, self *RangeSearchAdvanced) bool {
+	return n >= len(self.xTree)/2
 }
 
-func (self *RangeSearchAdvanced) reportRightHanging(lca, yLeft, yRight int) {
+func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
+	if isLeaf(node, self) {
+		indexInSortedPoints := node - len(self.xTree)/2
+		self.queryResult = append(self.queryResult, self.pointsRankSpace[indexInSortedPoints].i)
+		return
+	}
 
+	for i := yLeft; i < yRight; i++ {
+		self.queryResult = append(self.queryResult, self.ballInheritance[node][i])
+	}
+	return
+}
+
+func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax int) {
+	if isLeaf(node, self) {
+		index := node - len(self.xTree)/2
+		point := self.pointsRankSpace[index]
+		if point.x < xRankMax && point.y >= yLeft && point.y < yRight {
+			self.queryResult = append(self.queryResult, point.i)
+		}
+		return
+	}
+	rightChild := 2*node + 2
+	leftChild := 2*node + 1
+
+	keyOfMe := self.xTree[node]
+
+	if xRankMax > keyOfMe {
+		// report left childs everything.
+		yLeftTmp := descendLeft(yLeft, self.rankSelectStructures[node])
+		yRightTmp := descendLeft(yRight, self.rankSelectStructures[node])
+		self.reportAll(leftChild, yLeftTmp, yRightTmp)
+
+		// then descend right.
+		yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
+		yRightNew := descendRight(yRight, self.rankSelectStructures[node])
+		self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xRankMax)
+	} else {
+		// descendRight and do the same again.
+		yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
+		yRightNew := descendLeft(yRight, self.rankSelectStructures[node])
+		self.reportLeftHanging(leftChild, yLeftNew, yRightNew, xRankMax)
+	}
+}
+
+func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMin int) {
+	if isLeaf(node, self) {
+		index := node - len(self.xTree)/2
+		point := self.pointsRankSpace[index]
+		if point.x >= xRankMin && point.y >= yLeft && point.y < yRight {
+			self.queryResult = append(self.queryResult, point.i)
+		}
+		return
+	}
+
+	rightChild := 2*node + 2
+	leftChild := 2*node + 1
+
+	keyOfMe := self.xTree[node]
+
+	if xRankMin <= keyOfMe {
+		// report right childs everything.
+		yLeftTmp := descendRight(yLeft, self.rankSelectStructures[node])
+		yRightTmp := descendRight(yRight, self.rankSelectStructures[node])
+		self.reportAll(rightChild, yLeftTmp, yRightTmp)
+
+		// then descend left.
+		yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
+		yRightNew := descendLeft(yRight, self.rankSelectStructures[node])
+		self.reportRightHanging(leftChild, yLeftNew, yRightNew, xRankMin)
+	} else {
+		// descendRight and do the same again.
+		yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
+		yRightNew := descendRight(yRight, self.rankSelectStructures[node])
+		self.reportRightHanging(rightChild, yLeftNew, yRightNew, xRankMin)
+	}
 }
 
 func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int) {
@@ -79,7 +156,7 @@ func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int)
 	yLeftNew := yLeft
 	yRightNew := yRight
 	node := 0
-	for node != lca {
+	for node != lca && node < len(self.xTree) {
 		key := self.xTree[node]
 		if searchKey <= key {
 			yLeftNew = descendLeft(yLeftNew, self.rankSelectStructures[node])
@@ -95,11 +172,17 @@ func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int)
 }
 
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
-	var result = []int{}
+	self.queryBottomLeft = bottomLeft
+	self.queryTopRight = topRight
 	bottomLeftRank, topRightRank := self.getRankSpacePoints(bottomLeft, topRight)
-	lca := lowestCommonAncestor(bottomLeftRank.x, topRightRank.x)
+	leafIndexLeft := len(self.xTree)/2 + bottomLeftRank.x
+	leafIndexRight := len(self.xTree)/2 + topRightRank.x
+	lca := lowestCommonAncestor(leafIndexLeft, leafIndexRight)
 	yLeft, yRight := self.descendToLca(lca, bottomLeftRank.y, topRightRank.y)
 	_, _ = yLeft, yRight
+	result := make([]int, len(self.queryResult))
+	copy(result, self.queryResult)
+	self.queryResult = make([]int, 0, 16)
 	return result
 }
 
@@ -113,11 +196,11 @@ func (self *RangeSearchAdvanced) searchAndAppend(point pointRankPerm) {
 		key := self.xTree[node]
 		if point.x <= key {
 			self.bitArrays[node] = append(self.bitArrays[node], 0)
-			self.ballInheritance[height] = append(self.ballInheritance[height], point.i)
+			self.ballInheritance[node] = append(self.ballInheritance[node], point.i)
 			recursivelySearchAndAppend(2*node+1, height+1)
 		} else {
 			self.bitArrays[node] = append(self.bitArrays[node], 1)
-			self.ballInheritance[height] = append(self.ballInheritance[height], point.i)
+			self.ballInheritance[node] = append(self.ballInheritance[node], point.i)
 			recursivelySearchAndAppend(2*node+2, height+1)
 		}
 	}
@@ -143,11 +226,10 @@ func (self *RangeSearchAdvanced) buildRankSelectAndBallInheritance() {
 }
 
 func (self *RangeSearchAdvanced) initializeRankSelectBallInheritance() {
-	heightWithoutLeaves := self.xTreeHeight - 1
 	numberOfInternalNodes := len(self.xTree) / 2
 	self.bitArrays = make([][]int, numberOfInternalNodes)
 	self.rankSelectStructures = make([]gorasp.RankSelect, numberOfInternalNodes)
-	self.ballInheritance = make([][]int, heightWithoutLeaves)
+	self.ballInheritance = make([][]int, numberOfInternalNodes)
 }
 
 func setLeavesOfXTree(xTree []int, pointsRankSpace []pointRankPerm) []int {
@@ -240,6 +322,7 @@ func (self *RangeSearchAdvanced) Build() {
 	self.makeRankSpace()
 	self.makeTreeOnXAxis()
 	self.buildRankSelectAndBallInheritance()
+	self.queryResult = make([]int, 0, 16)
 }
 
 func NewRangeSearchAdvanced(points []Point) *RangeSearchAdvanced {
