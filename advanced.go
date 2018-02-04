@@ -171,6 +171,20 @@ func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int)
 	return yLeftNew, yRightNew
 }
 
+func (self *RangeSearchAdvanced) branchLeftReport(node, yLeft, yRight, xMinRank int) {
+	leftChild := 2*node + 1
+	yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
+	yRightNew := descendLeft(yRight, self.rankSelectStructures[node])
+	self.reportRightHanging(leftChild, yLeftNew, yRightNew, xMinRank)
+}
+
+func (self *RangeSearchAdvanced) branchRightReport(node, yLeft, yRight, xMaxRank int) {
+	rightChild := 2*node + 2
+	yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
+	yRightNew := descendRight(yRight, self.rankSelectStructures[node])
+	self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xMaxRank)
+}
+
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	self.queryBottomLeft = bottomLeft
 	self.queryTopRight = topRight
@@ -179,7 +193,10 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	leafIndexRight := len(self.xTree)/2 + topRightRank.x
 	lca := lowestCommonAncestor(leafIndexLeft, leafIndexRight)
 	yLeft, yRight := self.descendToLca(lca, bottomLeftRank.y, topRightRank.y)
-	_, _ = yLeft, yRight
+
+	self.branchLeftReport(lca, yLeft, yRight, bottomLeftRank.x)
+	self.branchRightReport(lca, yLeft, yRight, topRightRank.x)
+
 	result := make([]int, len(self.queryResult))
 	copy(result, self.queryResult)
 	self.queryResult = make([]int, 0, 16)
