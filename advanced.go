@@ -2,6 +2,7 @@ package goors
 
 import (
 	"github.com/jasn/gorasp"
+	"math/bits"
 	"sort"
 )
 
@@ -13,6 +14,8 @@ type RangeSearchAdvanced struct {
 	bitArrays            [][]int
 	rankSelectStructures []gorasp.RankSelect
 	ballInheritance      [][]int
+	xCoords              []float64
+	yCoords              []float64
 }
 
 func getNextPowerOfTwo(n int) int {
@@ -29,8 +32,74 @@ func getNextPowerOfTwo(n int) int {
 	return 1 << 30
 }
 
+func (self *RangeSearchAdvanced) getRankSpacePoints(bottomLeft, topRight Point) (pointRankPerm, pointRankPerm) {
+	bottomLeftRes := pointRankPerm{0, 0, -1}
+	topRightRes := pointRankPerm{0, 0, -1}
+
+	bottomLeftRes.x = sort.SearchFloat64s(self.xCoords, bottomLeft.x)
+	bottomLeftRes.y = sort.SearchFloat64s(self.yCoords, bottomLeft.y)
+
+	topRightRes.x = sort.Search(len(self.xCoords), func(i int) bool {
+		return self.xCoords[i] > topRight.x
+	})
+	topRightRes.y = sort.Search(len(self.yCoords), func(i int) bool {
+		return self.yCoords[i] > topRight.y
+	})
+	return bottomLeftRes, topRightRes
+}
+
+func lowestCommonAncestor(left, right int) int {
+	xor := uint64((left + 1) ^ (right + 1))
+	zeros := bits.LeadingZeros64(xor)
+	shift := uint(64 - zeros)
+	return ((left + 1) >> shift) - 1
+}
+
+func descendLeft(currentIndex int, rankSelectStruct gorasp.RankSelect) int {
+	onesLeft := rankSelectStruct.RankOfIndex(currentIndex)
+	zeros := currentIndex - int(onesLeft)
+	return zeros
+}
+
+func descendRight(currentIndex int, rankSelectStruct gorasp.RankSelect) int {
+	onesLeft := rankSelectStruct.RankOfIndex(currentIndex)
+	return int(onesLeft)
+}
+
+func (self *RangeSearchAdvanced) reportLeftHanging(lca, yLeft, yRight int) {
+
+}
+
+func (self *RangeSearchAdvanced) reportRightHanging(lca, yLeft, yRight int) {
+
+}
+
+func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int) {
+	searchKey := self.xTree[lca]
+	yLeftNew := yLeft
+	yRightNew := yRight
+	node := 0
+	for node != lca {
+		key := self.xTree[node]
+		if searchKey <= key {
+			yLeftNew = descendLeft(yLeftNew, self.rankSelectStructures[node])
+			yRightNew = descendLeft(yRightNew, self.rankSelectStructures[node])
+			node = 2*node + 1
+		} else {
+			yLeftNew = descendRight(yLeftNew, self.rankSelectStructures[node])
+			yRightNew = descendRight(yRightNew, self.rankSelectStructures[node])
+			node = 2*node + 2
+		}
+	}
+	return yLeftNew, yRightNew
+}
+
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	var result = []int{}
+	bottomLeftRank, topRightRank := self.getRankSpacePoints(bottomLeft, topRight)
+	lca := lowestCommonAncestor(bottomLeftRank.x, topRightRank.x)
+	yLeft, yRight := self.descendToLca(lca, bottomLeftRank.y, topRightRank.y)
+	_, _ = yLeft, yRight
 	return result
 }
 
@@ -43,11 +112,11 @@ func (self *RangeSearchAdvanced) searchAndAppend(point pointRankPerm) {
 		}
 		key := self.xTree[node]
 		if point.x <= key {
-			self.bitArrays[height] = append(self.bitArrays[height], 0)
+			self.bitArrays[node] = append(self.bitArrays[node], 0)
 			self.ballInheritance[height] = append(self.ballInheritance[height], point.i)
 			recursivelySearchAndAppend(2*node+1, height+1)
 		} else {
-			self.bitArrays[height] = append(self.bitArrays[height], 1)
+			self.bitArrays[node] = append(self.bitArrays[node], 1)
 			self.ballInheritance[height] = append(self.ballInheritance[height], point.i)
 			recursivelySearchAndAppend(2*node+2, height+1)
 		}
@@ -64,16 +133,20 @@ func (self *RangeSearchAdvanced) buildRankSelectAndBallInheritance() {
 	for _, p := range self.pointsRankSpace {
 		self.searchAndAppend(p)
 	}
-	for i := 0; i < self.xTreeHeight; i++ {
-		self.rankSelectStructures[i] = gorasp.NewRankSelectFast(self.bitArrays[i])
+	numberOfInternalNodes := len(self.xTree) / 2
+	for i := 0; i < numberOfInternalNodes; i++ {
+		if len(self.bitArrays[i]) > 0 {
+			self.rankSelectStructures[i] = gorasp.NewRankSelectFast(self.bitArrays[i])
+		}
 	}
 	sort.Sort(byXRank(self.pointsRankSpace))
 }
 
 func (self *RangeSearchAdvanced) initializeRankSelectBallInheritance() {
 	heightWithoutLeaves := self.xTreeHeight - 1
-	self.bitArrays = make([][]int, heightWithoutLeaves)
-	self.rankSelectStructures = make([]gorasp.RankSelect, heightWithoutLeaves)
+	numberOfInternalNodes := len(self.xTree) / 2
+	self.bitArrays = make([][]int, numberOfInternalNodes)
+	self.rankSelectStructures = make([]gorasp.RankSelect, numberOfInternalNodes)
 	self.ballInheritance = make([][]int, heightWithoutLeaves)
 }
 
@@ -153,16 +226,20 @@ func (self *RangeSearchAdvanced) makeRankSpace() {
 
 	self.pointsRankSpace = make([]pointRankPerm, len(self.points))
 	for index, p := range self.points {
-		xRank := sort.Search(len(self.points), func(i int) bool { return p.x < xCoords[i] })
-		yRank := sort.Search(len(self.points), func(i int) bool { return p.y < yCoords[i] })
+		xRank := sort.Search(len(self.points), func(i int) bool { return p.x <= xCoords[i] })
+		yRank := sort.Search(len(self.points), func(i int) bool { return p.y <= yCoords[i] })
 		self.pointsRankSpace[index].x = xRank
 		self.pointsRankSpace[index].y = yRank
 		self.pointsRankSpace[index].i = index
 	}
+	self.xCoords = xCoords
+	self.yCoords = yCoords
 }
 
 func (self *RangeSearchAdvanced) Build() {
-
+	self.makeRankSpace()
+	self.makeTreeOnXAxis()
+	self.buildRankSelectAndBallInheritance()
 }
 
 func NewRangeSearchAdvanced(points []Point) *RangeSearchAdvanced {
