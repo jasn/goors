@@ -76,7 +76,10 @@ func isLeaf(n int, self *RangeSearchAdvanced) bool {
 func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
 	if isLeaf(node, self) {
 		indexInSortedPoints := node - len(self.xTree)/2
-		self.queryResult = append(self.queryResult, self.pointsRankSpace[indexInSortedPoints].i)
+		point := self.points[self.pointsRankSpace[indexInSortedPoints].i]
+		if isContained(self.queryBottomLeft, self.queryTopRight, point) {
+			self.queryResult = append(self.queryResult, self.pointsRankSpace[indexInSortedPoints].i)
+		}
 		return
 	}
 
@@ -90,7 +93,7 @@ func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax
 	if isLeaf(node, self) {
 		index := node - len(self.xTree)/2
 		point := self.pointsRankSpace[index]
-		if point.x < xRankMax && point.y >= yLeft && point.y < yRight {
+		if point.x < xRankMax && point.y >= yLeft && yLeft < yRight {
 			self.queryResult = append(self.queryResult, point.i)
 		}
 		return
@@ -99,7 +102,9 @@ func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax
 	leftChild := 2*node + 1
 
 	keyOfMe := self.xTree[node]
-
+	if keyOfMe == -1 {
+		return
+	}
 	if xRankMax > keyOfMe {
 		// report left childs everything.
 		yLeftTmp := descendLeft(yLeft, self.rankSelectStructures[node])
@@ -122,7 +127,7 @@ func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMi
 	if isLeaf(node, self) {
 		index := node - len(self.xTree)/2
 		point := self.pointsRankSpace[index]
-		if point.x >= xRankMin && point.y >= yLeft && point.y < yRight {
+		if point.x >= xRankMin && point.y >= yLeft && yLeft < yRight {
 			self.queryResult = append(self.queryResult, point.i)
 		}
 		return
@@ -132,7 +137,9 @@ func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMi
 	leftChild := 2*node + 1
 
 	keyOfMe := self.xTree[node]
-
+	if keyOfMe == -1 {
+		return
+	}
 	if xRankMin <= keyOfMe {
 		// report right childs everything.
 		yLeftTmp := descendRight(yLeft, self.rankSelectStructures[node])
@@ -185,13 +192,47 @@ func (self *RangeSearchAdvanced) branchRightReport(node, yLeft, yRight, xMaxRank
 	self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xMaxRank)
 }
 
+func isContained(bottomLeft, topRight, point Point) bool {
+	return point.x >= bottomLeft.x && point.x <= topRight.x && point.y >= bottomLeft.y && point.y <= topRight.y
+}
+
+func areBothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex int) bool {
+	caseOne := leafIndexLeft == leafIndexRight
+	caseTwo := leafIndexRight == onePastLastLeafIndex && leafIndexLeft == onePastLastLeafIndex-1
+	return caseOne || caseTwo
+}
+
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	self.queryBottomLeft = bottomLeft
 	self.queryTopRight = topRight
 	bottomLeftRank, topRightRank := self.getRankSpacePoints(bottomLeft, topRight)
 	leafIndexLeft := len(self.xTree)/2 + bottomLeftRank.x
 	leafIndexRight := len(self.xTree)/2 + topRightRank.x
-	lca := lowestCommonAncestor(leafIndexLeft, leafIndexRight)
+	// Check if both x-coordinates ended up in the same leaf.
+	// can happen either at the very end meaning the rightLeafIndex is one past the end of the array
+	onePastLastLeafIndex := len(self.xTree)/2 + len(self.points)
+	if areBothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex) {
+		if leafIndexLeft >= len(self.xTree) {
+			result := make([]int, 0)
+			return result
+		}
+		idx := leafIndexLeft - len(self.xTree)/2
+		point := self.points[self.pointsRankSpace[idx].i]
+		if isContained(bottomLeft, topRight, point) {
+			result := make([]int, 1)
+			result[0] = self.pointsRankSpace[idx].i
+			return result
+		} else {
+			result := make([]int, 0)
+			return result
+		}
+	}
+	var lca int = 0
+	if leafIndexRight < len(self.xTree) {
+		lca = lowestCommonAncestor(leafIndexLeft, leafIndexRight)
+	} else {
+		lca = lowestCommonAncestor(leafIndexLeft, leafIndexRight-1)
+	}
 	yLeft, yRight := self.descendToLca(lca, bottomLeftRank.y, topRightRank.y)
 
 	self.branchLeftReport(lca, yLeft, yRight, bottomLeftRank.x)
@@ -258,9 +299,9 @@ func setLeavesOfXTree(xTree []int, pointsRankSpace []pointRankPerm) []int {
 	}
 
 	leafsEndAt := leafsStartAt + len(pointsRankSpace)
-	maxInt := 1<<31 - 1
+	noDataValue := -1
 	for i := leafsEndAt; i < len(xTree); i++ {
-		xTree[i] = maxInt
+		xTree[i] = noDataValue
 	}
 	return xTree
 }
@@ -285,8 +326,17 @@ func setInternalNodesOfXTree(xTree []int) []int {
 
 	arrayLength := len(xTree)
 	for i := arrayLength/2 - 1; i >= 0; i-- {
-		key := maxLeftSubTree(i)
-		xTree[i] = key
+		// put -1 as key of internal nodes where no descendant leaf contains input data.
+		if xTree[2*i+1] == -1 && xTree[2*i+2] == -1 {
+			xTree[i] = -1
+		} else {
+			key := maxLeftSubTree(i)
+			if key != -1 {
+				xTree[i] = key
+			} else {
+				xTree[i] = int(1<<31 - 1)
+			}
+		}
 	}
 
 	return xTree
