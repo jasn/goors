@@ -199,6 +199,8 @@ func isContained(bottomLeft, topRight, point Point) bool {
 	return point.x >= bottomLeft.x && point.x <= topRight.x && point.y >= bottomLeft.y && point.y <= topRight.y
 }
 
+// Checks if both x-coordinates ended up in the same leaf.
+// can happen either at the very end meaning the rightLeafIndex is one past the end of the array
 func bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex int) bool {
 	caseOne := leafIndexLeft == leafIndexRight
 	caseTwo := leafIndexRight == onePastLastLeafIndex && leafIndexLeft == onePastLastLeafIndex-1
@@ -211,8 +213,7 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	bottomLeftRank, topRightRank := self.getRankSpacePoints(bottomLeft, topRight)
 	leafIndexLeft := len(self.xTree)/2 + bottomLeftRank.x
 	leafIndexRight := len(self.xTree)/2 + topRightRank.x
-	// Check if both x-coordinates ended up in the same leaf.
-	// can happen either at the very end meaning the rightLeafIndex is one past the end of the array
+
 	onePastLastLeafIndex := len(self.xTree)/2 + len(self.points)
 	if bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex) {
 		if leafIndexLeft >= onePastLastLeafIndex {
@@ -230,6 +231,7 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 			return result
 		}
 	}
+
 	var lca int = 0
 	if leafIndexRight < len(self.xTree) {
 		lca = lowestCommonAncestor(leafIndexLeft, leafIndexRight)
