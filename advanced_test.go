@@ -229,7 +229,7 @@ func TestTenElementsReportSixth(t *testing.T) {
 }
 
 func TestRandom(t *testing.T) {
-	size := 1234
+	size := 73828
 	points := make([]Point, size)
 	rand.Seed(42)
 	for i := 0; i < size; i++ {
@@ -277,6 +277,10 @@ func TestRandom(t *testing.T) {
 			}
 			t.Fail()
 		}
+		if doPrint {
+			fmt.Println("length of output:", len(resultAdvanced))
+		}
+
 		for _, v := range resultSimple {
 			found := false
 			for _, v2 := range resultAdvanced {
@@ -290,4 +294,31 @@ func TestRandom(t *testing.T) {
 			}
 		}
 	}
+}
+
+func BenchmarkAdvanced(b *testing.B) {
+	size := 85000
+	points := make([]Point, size)
+	rand.Seed(42)
+	for i := 0; i < size; i++ {
+		points[i] = Point{float64(rand.Float32() * 100), float64(rand.Float32() * 100)}
+	}
+	dsAdvanced := NewRangeSearchAdvanced(points)
+	dsAdvanced.Build()
+	numberOfQueries := 1000
+	sum := 0
+	b.ResetTimer()
+	for i := 0; i < numberOfQueries; i++ {
+		x1 := float64(rand.Float32() * 50)
+		x2 := float64(rand.Float32() * 50)
+		y1 := float64(rand.Float32() * 50)
+		y2 := float64(rand.Float32() * 50)
+
+		bottomLeft := Point{math.Min(x1, x2), math.Min(y1, y2)}
+		topRight := Point{math.Max(x1, x2), math.Max(y1, y2)}
+
+		sum += len(dsAdvanced.Query(bottomLeft, topRight))
+		//fmt.Println(len(resultAdvanced), "outputs")
+	}
+	fmt.Println(sum)
 }
