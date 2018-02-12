@@ -91,6 +91,9 @@ func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
 
 func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax int) {
 	if isLeaf(node, self) {
+		if self.xTree[node] == -1 {
+			return
+		}
 		index := node - len(self.xTree)/2
 		point := self.pointsRankSpace[index]
 		if point.x < xRankMax && point.y >= yLeft && yLeft < yRight {
@@ -196,7 +199,7 @@ func isContained(bottomLeft, topRight, point Point) bool {
 	return point.x >= bottomLeft.x && point.x <= topRight.x && point.y >= bottomLeft.y && point.y <= topRight.y
 }
 
-func areBothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex int) bool {
+func bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex int) bool {
 	caseOne := leafIndexLeft == leafIndexRight
 	caseTwo := leafIndexRight == onePastLastLeafIndex && leafIndexLeft == onePastLastLeafIndex-1
 	return caseOne || caseTwo
@@ -211,8 +214,8 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	// Check if both x-coordinates ended up in the same leaf.
 	// can happen either at the very end meaning the rightLeafIndex is one past the end of the array
 	onePastLastLeafIndex := len(self.xTree)/2 + len(self.points)
-	if areBothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex) {
-		if leafIndexLeft >= len(self.xTree) {
+	if bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex) {
+		if leafIndexLeft >= onePastLastLeafIndex {
 			result := make([]int, 0)
 			return result
 		}

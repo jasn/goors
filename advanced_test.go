@@ -235,12 +235,14 @@ func TestRandom(t *testing.T) {
 	for i := 0; i < size; i++ {
 		points[i] = Point{float64(rand.Float32()), float64(rand.Float32())}
 	}
-	fmt.Println("[")
-	for _, v := range points {
-		fmt.Println("(", v.x, ",", v.y, "),")
+	doPrint := false
+	if doPrint {
+		fmt.Println("[")
+		for _, v := range points {
+			fmt.Println("(", v.x, ",", v.y, "),")
+		}
+		fmt.Println("]")
 	}
-	fmt.Println("]")
-
 	dsAdvanced := NewRangeSearchAdvanced(points)
 	dsSimple := NewRangeSearchSimple(points)
 
@@ -257,7 +259,9 @@ func TestRandom(t *testing.T) {
 
 		bottomLeft := Point{math.Min(x1, x2), math.Min(y1, y2)}
 		topRight := Point{math.Max(x1, x2), math.Max(y1, y2)}
-		fmt.Println("querying:", bottomLeft, topRight)
+		if doPrint {
+			fmt.Println("querying:", bottomLeft, topRight, "iteration:", i)
+		}
 		resultAdvanced := dsAdvanced.Query(bottomLeft, topRight)
 		resultSimple := dsSimple.Query(bottomLeft, topRight)
 		if len(resultSimple) != len(resultAdvanced) {
