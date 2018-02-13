@@ -17,8 +17,6 @@ type RangeSearchAdvanced struct {
 	xCoords              []float64
 	yCoords              []float64
 	queryResult          []int
-	queryTopRight        Point
-	queryBottomLeft      Point
 }
 
 func getNextPowerOfTwo(n int) int {
@@ -76,8 +74,7 @@ func isLeaf(n int, self *RangeSearchAdvanced) bool {
 func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
 	if isLeaf(node, self) {
 		indexInSortedPoints := node - len(self.xTree)/2
-		point := self.points[self.pointsRankSpace[indexInSortedPoints].i]
-		if isContained(self.queryBottomLeft, self.queryTopRight, point) {
+		if yLeft < yRight {
 			self.queryResult = append(self.queryResult, self.pointsRankSpace[indexInSortedPoints].i)
 		}
 		return
@@ -208,8 +205,6 @@ func bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIn
 }
 
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
-	self.queryBottomLeft = bottomLeft
-	self.queryTopRight = topRight
 	bottomLeftRank, topRightRank := self.getRankSpacePoints(bottomLeft, topRight)
 	leafIndexLeft := len(self.xTree)/2 + bottomLeftRank.x
 	leafIndexRight := len(self.xTree)/2 + topRightRank.x
