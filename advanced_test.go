@@ -59,8 +59,8 @@ func TestSomething(t *testing.T) {
 	a := Point{1.9, 3.9}
 	b := Point{6.5, 9.2}
 	result := structure.Query(a, b)
-	for _, v := range result {
-		fmt.Println(v, "->", points[v])
+	if len(result) != 4 {
+		t.Fail()
 	}
 }
 
