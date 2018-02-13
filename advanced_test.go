@@ -228,6 +228,22 @@ func TestTenElementsReportSixth(t *testing.T) {
 	}
 }
 
+func Test573ElementsReportSixth(t *testing.T) {
+	points := make([]Point, 573)
+	for i := 0; i < len(points); i++ {
+		points[i] = Point{float64(i), float64(i)}
+	}
+	ds := NewRangeSearchAdvanced(points)
+	ds.Build()
+	bottomLeft := Point{4.5, 4.5}
+	topRight := Point{5.5, 5.5}
+	result := ds.Query(bottomLeft, topRight)
+	if len(result) != 1 || result[0] != 5 {
+		fmt.Println("Expected 1 results, but received only", len(result))
+		t.Fail()
+	}
+}
+
 func TestRandom(t *testing.T) {
 	size := 73828
 	points := make([]Point, size)
