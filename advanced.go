@@ -33,6 +33,8 @@ func getNextPowerOfTwo(n int) int {
 	return 1 << 30
 }
 
+// when processing a query we receive floats, but the rest of our structure uses rank space
+// This function finds the corresponding rank-space coordinates for the query range.
 func (self *RangeSearchAdvanced) getRankSpacePoints(bottomLeft, topRight Point) (pointRankPerm, pointRankPerm) {
 	bottomLeftRes := pointRankPerm{0, 0, -1}
 	topRightRes := pointRankPerm{0, 0, -1}
@@ -49,6 +51,8 @@ func (self *RangeSearchAdvanced) getRankSpacePoints(bottomLeft, topRight Point) 
 	return bottomLeftRes, topRightRes
 }
 
+// This is a neat trick to find the LCA of two nodes on the *same* level (that detail is important!)
+// It of course only works when we zero-index and use a heap-layout.
 func lowestCommonAncestor(left, right int) int {
 	xor := uint64((left + 1) ^ (right + 1))
 	zeros := bits.LeadingZeros64(xor)
@@ -56,21 +60,28 @@ func lowestCommonAncestor(left, right int) int {
 	return ((left + 1) >> shift) - 1
 }
 
+// currentIndex denotes a y-rank at the current node.
+// when descending we want to maintain an interval [l,r] such that all y-coordinates to be reported fall in that range.
+// this function is used when descending to the left.
 func descendLeft(currentIndex int, rankSelectStruct gorasp.RankSelect) int {
 	onesLeft := rankSelectStruct.RankOfIndex(currentIndex)
 	zeros := currentIndex - int(onesLeft)
 	return zeros
 }
 
+// similar to descendLeft
 func descendRight(currentIndex int, rankSelectStruct gorasp.RankSelect) int {
 	onesLeft := rankSelectStruct.RankOfIndex(currentIndex)
 	return int(onesLeft)
 }
 
+// the last half of the array self.xTree are leaves.
+// this function tests if a node represented by n is in fact a leaf.
 func isLeaf(n int, self *RangeSearchAdvanced) bool {
 	return n >= len(self.xTree)/2
 }
 
+// Reports everything hanging at or below node, with y-ranks [yLeft, yRight[ (half open interval).
 func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
 	if isLeaf(node, self) {
 		indexInSortedPoints := node - len(self.xTree)/2
@@ -86,6 +97,9 @@ func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
 	return
 }
 
+// After finding the lca, this function is called with node=lca's right child.
+// This function then keeps descending toward the node with key xRankMax, while
+// reporting all subtrees that are strictly to the left.
 func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax int) {
 	if isLeaf(node, self) {
 		if self.xTree[node] == -1 {
@@ -123,6 +137,7 @@ func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax
 	}
 }
 
+// symmetric to reportLeftHanging
 func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMin int) {
 	if isLeaf(node, self) {
 		index := node - len(self.xTree)/2
@@ -158,6 +173,7 @@ func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMi
 	}
 }
 
+// This function computes the y-rank-interval at a node lca, given that at the root the interval is [yLeft, yRight[ (half open).
 func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int) {
 	searchKey := self.xTree[lca]
 	yLeftNew := yLeft
@@ -178,6 +194,8 @@ func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int)
 	return yLeftNew, yRightNew
 }
 
+// convenience function, called with node=lca when processing a query.
+// Initiates the search towards the lower x-coordinate in the query range.
 func (self *RangeSearchAdvanced) branchLeftReport(node, yLeft, yRight, xMinRank int) {
 	leftChild := 2*node + 1
 	yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
@@ -185,6 +203,7 @@ func (self *RangeSearchAdvanced) branchLeftReport(node, yLeft, yRight, xMinRank 
 	self.reportRightHanging(leftChild, yLeftNew, yRightNew, xMinRank)
 }
 
+// symmetric to branchLeftReport
 func (self *RangeSearchAdvanced) branchRightReport(node, yLeft, yRight, xMaxRank int) {
 	rightChild := 2*node + 2
 	yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
@@ -192,6 +211,7 @@ func (self *RangeSearchAdvanced) branchRightReport(node, yLeft, yRight, xMaxRank
 	self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xMaxRank)
 }
 
+// determines if point is contained in the rectangle defined by bottomLeft, topRight.
 func isContained(bottomLeft, topRight, point Point) bool {
 	return point.x >= bottomLeft.x && point.x <= topRight.x && point.y >= bottomLeft.y && point.y <= topRight.y
 }
@@ -204,12 +224,16 @@ func bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIn
 	return caseOne || caseTwo
 }
 
+// The query algorithm for the structure.
+// Assumes bottomLeft, is in fact less than topRight on both the x and y coordinates.
+// return a slice of indices, each is an index into self.points, which is in the order it was given to the constructor.
 func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	bottomLeftRank, topRightRank := self.getRankSpacePoints(bottomLeft, topRight)
 	leafIndexLeft := len(self.xTree)/2 + bottomLeftRank.x
 	leafIndexRight := len(self.xTree)/2 + topRightRank.x
 
 	onePastLastLeafIndex := len(self.xTree)/2 + len(self.points)
+	// special case
 	if bothXCoordinatesInSameLeaf(leafIndexLeft, leafIndexRight, onePastLastLeafIndex) {
 		if leafIndexLeft >= onePastLastLeafIndex {
 			result := make([]int, 0)
@@ -227,6 +251,7 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 		}
 	}
 
+	// general case
 	var lca int = 0
 	if leafIndexRight < len(self.xTree) {
 		lca = lowestCommonAncestor(leafIndexLeft, leafIndexRight)
@@ -244,6 +269,8 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	return result
 }
 
+// helper function used to build ball-inheritace and bit arrays.
+// This function is called with elements in self.pointsRankspace by increasing y-rank.
 func (self *RangeSearchAdvanced) searchAndAppend(point pointRankPerm) {
 	var recursivelySearchAndAppend func(node, height int)
 	recursivelySearchAndAppend = func(node, height int) {
@@ -267,6 +294,7 @@ func (self *RangeSearchAdvanced) searchAndAppend(point pointRankPerm) {
 	recursivelySearchAndAppend(root, rootHeight)
 }
 
+// Helper function for building the bit arrays and ball-inheritance structure.
 func (self *RangeSearchAdvanced) buildRankSelectAndBallInheritance() {
 	self.initializeRankSelectBallInheritance()
 
@@ -283,6 +311,7 @@ func (self *RangeSearchAdvanced) buildRankSelectAndBallInheritance() {
 	sort.Sort(byXRank(self.pointsRankSpace))
 }
 
+// helper function to initialize all the important arrays.
 func (self *RangeSearchAdvanced) initializeRankSelectBallInheritance() {
 	numberOfInternalNodes := len(self.xTree) / 2
 	self.bitArrays = make([][]int, numberOfInternalNodes)
@@ -290,6 +319,7 @@ func (self *RangeSearchAdvanced) initializeRankSelectBallInheritance() {
 	self.ballInheritance = make([][]int, numberOfInternalNodes)
 }
 
+// Set the keys of the leaves appropriately.
 func setLeavesOfXTree(xTree []int, pointsRankSpace []pointRankPerm) []int {
 	arrayLength := len(xTree)
 	leafsStartAt := arrayLength / 2
@@ -306,6 +336,8 @@ func setLeavesOfXTree(xTree []int, pointsRankSpace []pointRankPerm) []int {
 	return xTree
 }
 
+// Set the keys of internal nodes appropriately.
+// We define the key of an internal node to be the largest key in its left subtree.
 func setInternalNodesOfXTree(xTree []int) []int {
 	var maxSubTree func(n int) int
 	maxSubTree = func(n int) int {
@@ -342,6 +374,7 @@ func setInternalNodesOfXTree(xTree []int) []int {
 	return xTree
 }
 
+// Builds the xTree.
 func (self *RangeSearchAdvanced) makeTreeOnXAxis() {
 	arrayLength := 2*getNextPowerOfTwo(len(self.pointsRankSpace)) - 1
 	self.xTree = make([]int, arrayLength)
@@ -354,6 +387,8 @@ func (self *RangeSearchAdvanced) makeTreeOnXAxis() {
 	self.setXTreeHeight()
 }
 
+// compute the height of xTree and set the field xTreeHeight.
+// Height is here defined as the number of nodes from root-to-leaf including both.
 func (self *RangeSearchAdvanced) setXTreeHeight() {
 	arrayLength := len(self.xTree)
 	height := uint(1)
@@ -363,6 +398,8 @@ func (self *RangeSearchAdvanced) setXTreeHeight() {
 	self.xTreeHeight = int(height)
 }
 
+// Since our inputs are floats, we reduce everything to rankspace first.
+// This is done by sorting and binary searching each point.
 func (self *RangeSearchAdvanced) makeRankSpace() {
 	xCoords := make([]float64, len(self.points))
 	yCoords := make([]float64, len(self.points))
@@ -385,6 +422,7 @@ func (self *RangeSearchAdvanced) makeRankSpace() {
 	self.yCoords = yCoords
 }
 
+// This function must be called before any Query can be called.
 func (self *RangeSearchAdvanced) Build() {
 	self.makeRankSpace()
 	self.makeTreeOnXAxis()
@@ -392,6 +430,7 @@ func (self *RangeSearchAdvanced) Build() {
 	self.queryResult = make([]int, 0, 16)
 }
 
+// Constructor: takes a slice of points. These are the points we want to build the structure on.
 func NewRangeSearchAdvanced(points []Point) *RangeSearchAdvanced {
 	result := new(RangeSearchAdvanced)
 	result.points = points
