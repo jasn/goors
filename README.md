@@ -32,10 +32,13 @@ And that is also where the entire trade-off in the solution is to be found.
 One way, is to just store a pointer for every index. This requires O(n log n) pointers in total -- current solution, and gives O(1) time per point reported.
 Alternatively one could not store anything, and just follow the bit vectors down to the leaf, required O(log n) per point, but maintaining overall O(n) space.
 
-# Remarks
+# Remarks on structure of code
 If I had more time, I would have seperated out the ball inheritance to stand on its own, currently it sits in the implementation of the tree, which is inconvenient if we want to use other strategies.
-It is also something that can change all on its own, so we should (following object oriented practices) seperate it out, give an interface and provide implementations.
-Perhaps one could also argue, that it would then be appropriate to also have factory for instantiating a range searching structure with the desired trade-offs.
+Ball-Inheritance is also a part that can change all on its own, so we should (following object oriented practices) seperate it out, give an interface and provide implementations.
+Perhaps one could also argue, that it would then be appropriate to also have factory for instantiating a range searching structure with the desired trade-offs, based on various solutions to the Ball-Inheritance problem.
+
+We could make the implementation more clear by seperating the 'rank-space' reductions out of the current implementation, and just assume the input is already in rank-space.
+I regret having queries be closed intervals, rather than half-open. I think it could eliminate some special cases in the structure in advanced.go by making that change.
 
 ## Optimization
 The implementation uses an implicit tree representation.
