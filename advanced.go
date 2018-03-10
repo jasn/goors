@@ -16,7 +16,6 @@ type RangeSearchAdvanced struct {
 	ballInheritance      [][]int
 	xCoords              []float64
 	yCoords              []float64
-	queryResult          []int
 }
 
 func getNextPowerOfTwo(n int) int {
@@ -82,70 +81,87 @@ func isLeaf(n int, self *RangeSearchAdvanced) bool {
 }
 
 // Reports everything hanging at or below node, with y-ranks [yLeft, yRight[ (half open interval).
-func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) {
+func (self *RangeSearchAdvanced) reportAll(node, yLeft, yRight int) []int {
 	if isLeaf(node, self) {
 		indexInSortedPoints := node - len(self.xTree)/2
 		if yLeft < yRight {
-			self.queryResult = append(self.queryResult, self.pointsRankSpace[indexInSortedPoints].i)
+			return []int{self.pointsRankSpace[indexInSortedPoints].i}
 		}
-		return
+		return []int{}
 	}
 
+	result := make([]int, yRight-yLeft)
 	for i := yLeft; i < yRight; i++ {
-		self.queryResult = append(self.queryResult, self.ballInheritance[node][i])
+		result[i-yLeft] = self.ballInheritance[node][i]
 	}
-	return
+	return result
+}
+
+// appends the smaller list to the bigger list.
+func merge(left, right []int) []int {
+	if len(right) > len(left) {
+		for _, v := range left {
+			right = append(right, v)
+		}
+		return right
+	} else {
+		for _, v := range right {
+			left = append(left, v)
+		}
+		return left
+	}
 }
 
 // After finding the lca, this function is called with node=lca's right child.
 // This function then keeps descending toward the node with key xRankMax, while
 // reporting all subtrees that are strictly to the left.
-func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax int) {
+func (self *RangeSearchAdvanced) reportLeftHanging(node, yLeft, yRight, xRankMax int) []int {
 	if isLeaf(node, self) {
 		if self.xTree[node] == -1 {
-			return
+			return []int{}
 		}
 		index := node - len(self.xTree)/2
 		point := self.pointsRankSpace[index]
 		if point.x < xRankMax && point.y >= yLeft && yLeft < yRight {
-			self.queryResult = append(self.queryResult, point.i)
+			return []int{point.i}
 		}
-		return
+		return []int{}
 	}
 	rightChild := 2*node + 2
 	leftChild := 2*node + 1
 
 	keyOfMe := self.xTree[node]
 	if keyOfMe == -1 {
-		return
+		return []int{}
 	}
 	if xRankMax > keyOfMe {
 		// report left childs everything.
 		yLeftTmp := descendLeft(yLeft, self.rankSelectStructures[node])
 		yRightTmp := descendLeft(yRight, self.rankSelectStructures[node])
-		self.reportAll(leftChild, yLeftTmp, yRightTmp)
+		result_left := self.reportAll(leftChild, yLeftTmp, yRightTmp)
 
 		// then descend right.
 		yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
 		yRightNew := descendRight(yRight, self.rankSelectStructures[node])
-		self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xRankMax)
+		result_right := self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xRankMax)
+		return merge(result_left, result_right)
 	} else {
 		// descendRight and do the same again.
 		yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
 		yRightNew := descendLeft(yRight, self.rankSelectStructures[node])
-		self.reportLeftHanging(leftChild, yLeftNew, yRightNew, xRankMax)
+		return self.reportLeftHanging(leftChild, yLeftNew, yRightNew, xRankMax)
 	}
 }
 
 // symmetric to reportLeftHanging
-func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMin int) {
+func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMin int) []int {
 	if isLeaf(node, self) {
 		index := node - len(self.xTree)/2
 		point := self.pointsRankSpace[index]
 		if point.x >= xRankMin && point.y >= yLeft && yLeft < yRight {
-			self.queryResult = append(self.queryResult, point.i)
+			return []int{point.i}
 		}
-		return
+		return []int{}
 	}
 
 	rightChild := 2*node + 2
@@ -153,23 +169,25 @@ func (self *RangeSearchAdvanced) reportRightHanging(node, yLeft, yRight, xRankMi
 
 	keyOfMe := self.xTree[node]
 	if keyOfMe == -1 {
-		return
+		return []int{}
 	}
+
 	if xRankMin <= keyOfMe {
 		// report right childs everything.
 		yLeftTmp := descendRight(yLeft, self.rankSelectStructures[node])
 		yRightTmp := descendRight(yRight, self.rankSelectStructures[node])
-		self.reportAll(rightChild, yLeftTmp, yRightTmp)
+		result_left := self.reportAll(rightChild, yLeftTmp, yRightTmp)
 
 		// then descend left.
 		yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
 		yRightNew := descendLeft(yRight, self.rankSelectStructures[node])
-		self.reportRightHanging(leftChild, yLeftNew, yRightNew, xRankMin)
+		result_right := self.reportRightHanging(leftChild, yLeftNew, yRightNew, xRankMin)
+		return merge(result_left, result_right)
 	} else {
 		// descendRight and do the same again.
 		yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
 		yRightNew := descendRight(yRight, self.rankSelectStructures[node])
-		self.reportRightHanging(rightChild, yLeftNew, yRightNew, xRankMin)
+		return self.reportRightHanging(rightChild, yLeftNew, yRightNew, xRankMin)
 	}
 }
 
@@ -196,19 +214,19 @@ func (self *RangeSearchAdvanced) descendToLca(lca, yLeft, yRight int) (int, int)
 
 // convenience function, called with node=lca when processing a query.
 // Initiates the search towards the lower x-coordinate in the query range.
-func (self *RangeSearchAdvanced) branchLeftReport(node, yLeft, yRight, xMinRank int) {
+func (self *RangeSearchAdvanced) branchLeftReport(node, yLeft, yRight, xMinRank int) []int {
 	leftChild := 2*node + 1
 	yLeftNew := descendLeft(yLeft, self.rankSelectStructures[node])
 	yRightNew := descendLeft(yRight, self.rankSelectStructures[node])
-	self.reportRightHanging(leftChild, yLeftNew, yRightNew, xMinRank)
+	return self.reportRightHanging(leftChild, yLeftNew, yRightNew, xMinRank)
 }
 
 // symmetric to branchLeftReport
-func (self *RangeSearchAdvanced) branchRightReport(node, yLeft, yRight, xMaxRank int) {
+func (self *RangeSearchAdvanced) branchRightReport(node, yLeft, yRight, xMaxRank int) []int {
 	rightChild := 2*node + 2
 	yLeftNew := descendRight(yLeft, self.rankSelectStructures[node])
 	yRightNew := descendRight(yRight, self.rankSelectStructures[node])
-	self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xMaxRank)
+	return self.reportLeftHanging(rightChild, yLeftNew, yRightNew, xMaxRank)
 }
 
 // determines if point is contained in the rectangle defined by bottomLeft, topRight.
@@ -260,12 +278,11 @@ func (self *RangeSearchAdvanced) Query(bottomLeft, topRight Point) []int {
 	}
 	yLeft, yRight := self.descendToLca(lca, bottomLeftRank.y, topRightRank.y)
 
-	self.branchLeftReport(lca, yLeft, yRight, bottomLeftRank.x)
-	self.branchRightReport(lca, yLeft, yRight, topRightRank.x)
-
-	result := make([]int, len(self.queryResult))
-	copy(result, self.queryResult)
-	self.queryResult = make([]int, 0, 16)
+	result := self.branchLeftReport(lca, yLeft, yRight, bottomLeftRank.x)
+	result = append(
+		result,
+		self.branchRightReport(lca, yLeft, yRight, topRightRank.x)...,
+	)
 	return result
 }
 
@@ -427,7 +444,6 @@ func (self *RangeSearchAdvanced) Build() {
 	self.makeRankSpace()
 	self.makeTreeOnXAxis()
 	self.buildRankSelectAndBallInheritance()
-	self.queryResult = make([]int, 0, 16)
 }
 
 // Constructor: takes a slice of points. These are the points we want to build the structure on.
