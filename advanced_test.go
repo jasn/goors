@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
+	"runtime/pprof"
 	"testing"
 )
 
@@ -341,6 +343,8 @@ func BenchmarkAdvanced(b *testing.B) {
 
 		sum += len(dsAdvanced.Query(bottomLeft, topRight))
 	}
-
+	f, _ := os.Create("memory_benchmark.prof")
+	pprof.WriteHeapProfile(f)
+	fmt.Println("Average output size:", float64(sum)/float64(b.N))
 	result_advanced_test = sum
 }
