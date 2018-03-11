@@ -245,6 +245,9 @@ func Test573ElementsReportSixth(t *testing.T) {
 }
 
 func TestRandom(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	size := 73828
 	points := make([]Point, size)
 	rand.Seed(42)
@@ -312,7 +315,10 @@ func TestRandom(t *testing.T) {
 	}
 }
 
+var result_advanced_test int
+
 func BenchmarkAdvanced(b *testing.B) {
+	sum := 0
 	size := 85000
 	points := make([]Point, size)
 	rand.Seed(42)
@@ -321,8 +327,8 @@ func BenchmarkAdvanced(b *testing.B) {
 	}
 	dsAdvanced := NewRangeSearchAdvanced(points)
 	dsAdvanced.Build()
-	numberOfQueries := 1000
-	sum := 0
+	numberOfQueries := b.N
+
 	b.ResetTimer()
 	for i := 0; i < numberOfQueries; i++ {
 		x1 := float64(rand.Float32() * 50)
@@ -334,7 +340,7 @@ func BenchmarkAdvanced(b *testing.B) {
 		topRight := Point{math.Max(x1, x2), math.Max(y1, y2)}
 
 		sum += len(dsAdvanced.Query(bottomLeft, topRight))
-		//fmt.Println(len(resultAdvanced), "outputs")
 	}
-	fmt.Println(sum)
+
+	result_advanced_test = sum
 }
